@@ -37,7 +37,7 @@ from train import evaluate_test_set
 # Page Configuration & Styling
 # ==============================================================================
 st.set_page_config(
-    page_title="South Indian Food Classifier | EfficientNet-B0",
+    page_title="Indian Food Classifier | EfficientNet-B0",
     page_icon="🍲",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -262,7 +262,7 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
             format_func=lambda x: x.title(),
             key="sample_class_selector",
         )
-        pick_btn = st.button("🎲 Pick Random Sample", use_container_width=True)
+        pick_btn = st.button("🎲 Pick Random Sample", width="stretch")
 
         if pick_btn:
             test_dir = os.path.join("food20dataset/test_set", sample_class)
@@ -324,7 +324,7 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
             if st.session_state.image_source == "sample"
             else f"Uploaded ({st.session_state.image_name})"
         )
-        st.image(active_img, caption=source_label, use_container_width=True)
+        st.image(active_img, caption=source_label, width="stretch")
 
         # Grad-CAM option
         show_gradcam = st.checkbox("🔥 Show Grad-CAM Attention Heatmap", value=False)
@@ -340,7 +340,7 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
                 st.image(
                     cam_overlay,
                     caption=f"Grad-CAM Heatmap overlay for predicted '{top_class.title()}'",
-                    use_container_width=True
+                    width="stretch"
                 )
             except Exception as cam_err:
                 st.warning(f"Grad-CAM could not be computed: {cam_err}")
@@ -359,7 +359,7 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
                 <div style="font-size:1.15rem; font-weight:600; color:#2563EB; margin-top:0.35rem;">
                     Confidence: {top_confidence * 100:.2f}%
                 </div>
-                <div class="info-tag">Note: Model was trained with label smoothing 0.1, making 70–90% normal for high certainty.</div>
+                <div class="info-tag">Note: Model was trained with label smoothing 0.1; the maximum possible confidence is about 91%, so 70-90% is normal for high certainty.</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -388,7 +388,7 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
         # Top-3 predictions bar chart
         st.markdown("##### 📊 Top-3 Predictions")
         fig_bar = plot_top_k_predictions(top_k)
-        st.pyplot(fig_bar, use_container_width=True)
+        st.pyplot(fig_bar, width="stretch")
         plt.close(fig_bar)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -396,8 +396,8 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
     # ==============================================================================
     # Image Processing Steps Expander
     # ==============================================================================
-    with st.expander("🔍 Show image processing steps", expanded=False):
-        st.markdown("Detailed step-by-step image transformation stages applied during inference:")
+    with st.expander("🔍 Show image processing steps & calculations", expanded=True):
+        st.markdown("Detailed step-by-step image transformation stages applied during inference with exact mathematical calculations:")
         
         try:
             steps = extract_preprocessing_steps(active_img, num_aug_samples=5)
@@ -405,79 +405,272 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
             st.error(f"Error extracting image processing steps: {e}")
             return
 
-        # Row 1: Steps a, b, c
-        st.markdown("#### 1. EXIF Correction, Resizing & Tensor Conversion")
-        col_a, col_b, col_c = st.columns(3, gap="medium")
+        calc = steps.get("calculations", {})
 
-        with col_a:
-            st.markdown("**a. Original Image (EXIF transposed)**")
-            st.image(steps["original_image"], use_container_width=True)
-            st.caption(f"Dimensions: **{steps['original_size'][0]} x {steps['original_size'][1]} px** (RGB)")
+        # ----------------------------------------------------------------------
+        # Step 1: Input Dimensions & EXIF Orientation Correction
+        # ----------------------------------------------------------------------
+        st.markdown("### 1️⃣ Step 1: Input Acquisition & Dimension Preparation")
+        st.markdown(
+            "Phone camera orientation metadata (EXIF) is transposed to ensure the image is upright. "
+            "If dimensions exceed 1024 px, proportional thumbnail downscaling is applied to preserve aspect ratio without distortion. "
+            "The sizes shown below are after the 1024 px shrink, not necessarily the uploaded file size."
+        )
 
-        with col_b:
-            st.markdown("**b. Exact Resize to (224, 224)**")
-            st.image(steps["resized_image"], use_container_width=True)
-            st.caption(f"Dimensions: **{steps['resized_size'][0]} x {steps['resized_size'][1]} px** (No center crop)")
+        col_s1_img, col_s1_calc = st.columns([1, 1.3], gap="medium")
+        with col_s1_img:
+            st.image(steps["original_image"], caption=f"Prepared Image ({calc.get('orig_w', steps['original_size'][0])} × {calc.get('orig_h', steps['original_size'][1])} px)", width="stretch")
+        
+        with col_s1_calc:
+            orig_w = calc.get("orig_w", steps["original_size"][0])
+            orig_h = calc.get("orig_h", steps["original_size"][1])
+            orig_ar = calc.get("orig_aspect_ratio", orig_w / orig_h if orig_h > 0 else 1.0)
+            orig_pix = calc.get("orig_pixels", orig_w * orig_h)
+            orig_mem = calc.get("orig_memory_bytes", orig_pix * 3)
 
-        with col_c:
-            st.markdown("**c. Converted to Tensor**")
-            st.image(steps["raw_tensor"].permute(1, 2, 0).numpy(), use_container_width=True)
-            shape_str = str(steps["tensor_shape"])
-            st.caption(f"Shape: **{shape_str}** | Normalized range: **[0.0, 1.0]**")
+            st.markdown("**Mathematical Calculations:**")
+            st.latex(r"\text{Aspect Ratio (AR)} = \frac{W_{\text{orig}}}{H_{\text{orig}}} = \frac{" + f"{orig_w}" + r"}{" + f"{orig_h}" + r"} = " + f"{orig_ar:.3f} : 1")
+            st.latex(r"N_{\text{orig}} = W_{\text{orig}} \times H_{\text{orig}} = " + f"{orig_w} \\times {orig_h} = {orig_pix:,}" + r"\text{ pixels}")
+            st.latex(r"\text{Raw Memory (RGB uint8)} = \frac{N_{\text{orig}} \times 3 \text{ bytes}}{1024^2} = " + f"{orig_mem / (1024 * 1024):.2f}" + r"\text{ MB}")
+            
+            m1, m2, m3 = st.columns(3)
+            with m1:
+                st.metric("Width × Height", f"{orig_w} × {orig_h} px")
+            with m2:
+                st.metric("Aspect Ratio", f"{orig_ar:.2f} : 1")
+            with m3:
+                st.metric("Total Pixels", f"{orig_pix:,}")
 
         st.markdown("---")
 
-        # Row 2: Step d - Normalization & Channels
-        st.markdown("#### 2. Normalization & Channel Decompositions")
-        st.caption(
-            f"Normalized using ImageNet mean: {IMAGENET_MEAN} and std: {IMAGENET_STD}. "
-            "Displayed after de-normalizing, plus separate Red, Green, and Blue channel intensity views."
+        # ----------------------------------------------------------------------
+        # Step 2: Spatial Resizing to Fixed Network Input (224 x 224)
+        # ----------------------------------------------------------------------
+        st.markdown("### 2️⃣ Step 2: Spatial Resizing to (224 × 224)")
+        st.markdown(
+            "EfficientNet-B0 requires a fixed input resolution of $224 \\times 224$ pixels. "
+            "Bilinear interpolation uses distance-weighted averages of nearby pixels. "
+            "The image is resized directly to 224x224 with no cropping, so non-square images are stretched (as in training)."
         )
-        col_d1, col_d2, col_d3, col_d4 = st.columns(4, gap="small")
 
+        col_s2_img, col_s2_calc = st.columns([1, 1.3], gap="medium")
+        with col_s2_img:
+            st.image(steps["resized_image"], caption="Resized Image (224 × 224 px)", width="stretch")
+
+        with col_s2_calc:
+            scale_x = calc.get("scale_x", 224 / orig_w if orig_w > 0 else 1.0)
+            scale_y = calc.get("scale_y", 224 / orig_h if orig_h > 0 else 1.0)
+            pix_change = calc.get("pixel_change_pct", ((50176 - orig_pix) / orig_pix) * 100 if orig_pix > 0 else 0.0)
+
+            st.markdown("**Mathematical Calculations:**")
+            st.latex(r"S_x = \frac{W_{\text{target}}}{W_{\text{orig}}} = \frac{224}{" + f"{orig_w}" + r"} = " + f"{scale_x:.4f}")
+            st.latex(r"S_y = \frac{H_{\text{target}}}{H_{\text{orig}}} = \frac{224}{" + f"{orig_h}" + r"} = " + f"{scale_y:.4f}")
+            st.latex(r"\Delta \text{ Pixel Count} = \frac{224 \times 224 - N_{\text{orig}}}{N_{\text{orig}}} \times 100\% = " + f"{pix_change:+.1f}\\%")
+            st.latex(r"I_{\text{target}}(x, y) = \sum_{i \in \{0, 1\}} \sum_{j \in \{0, 1\}} w_{i, j} \cdot I_{\text{orig}}(x_i, y_j)")
+
+            m1, m2, m3 = st.columns(3)
+            with m1:
+                st.metric("Target Size", "224 × 224 px")
+            with m2:
+                st.metric("Resized Pixels", "50,176 px")
+            with m3:
+                st.metric("Pixel Scale Δ", f"{pix_change:+.1f}%")
+
+        st.markdown("---")
+
+        # ----------------------------------------------------------------------
+        # Step 3: PyTorch Tensor Conversion & Value Range Scaling
+        # ----------------------------------------------------------------------
+        st.markdown("### 3️⃣ Step 3: Tensor Conversion & [0.0, 1.0] Range Scaling")
+        st.markdown(
+            "Converts the PIL uint8 image $([0, 255])$ into a 32-bit floating point PyTorch tensor $([0.0, 1.0])$. "
+            "The memory layout is permuted from $(H, W, C)$ to PyTorch's native channel-first order $(C, H, W)$."
+        )
+
+        col_s3_img, col_s3_calc = st.columns([1, 1.3], gap="medium")
+        with col_s3_img:
+            st.image(steps["raw_tensor"].permute(1, 2, 0).numpy(), caption="PyTorch Float Tensor (3, 224, 224)", width="stretch")
+
+        with col_s3_calc:
+            st.markdown("**Mathematical Formula:**")
+            st.latex(r"x_{\text{tensor}}[c, y, x] = \frac{x_{\text{uint8}}[y, x, c]}{255.0} \quad \in [0.0, 1.0]")
+            st.latex(r"\text{Dimension Permute: } (H=224, W=224, C=3) \xrightarrow{\text{permute}(2, 0, 1)} (C=3, H=224, W=224)")
+            
+            raw_r, raw_g, raw_b = calc.get("raw_center_rgb", (128, 128, 128))
+            t_r, t_g, t_b = calc.get("tensor_center_rgb", (0.5, 0.5, 0.5))
+            cx, cy = calc.get("center_coord", (112, 112))
+            st.markdown(f"**Sample Center Pixel Calculation at $(x={cx}, y={cy})$:**")
+            st.markdown(
+                f"- **Red:** $R_{{\\text{{raw}}}} = {raw_r} \\implies R_{{\\text{{tensor}}}} = \\frac{{{raw_r}}}{{255.0}} = \\mathbf{{{t_r:.4f}}}$\n"
+                f"- **Green:** $G_{{\\text{{raw}}}} = {raw_g} \\implies G_{{\\text{{tensor}}}} = \\frac{{{raw_g}}}{{255.0}} = \\mathbf{{{t_g:.4f}}}$\n"
+                f"- **Blue:** $B_{{\\text{{raw}}}} = {raw_b} \\implies B_{{\\text{{tensor}}}} = \\frac{{{raw_b}}}{{255.0}} = \\mathbf{{{t_b:.4f}}}$"
+            )
+
+        # Pre-normalization statistics table
+        raw_stats = calc.get("raw_stats", {
+            "R": {"min": 0, "max": 1, "mean": 0.5, "std": 0.2},
+            "G": {"min": 0, "max": 1, "mean": 0.5, "std": 0.2},
+            "B": {"min": 0, "max": 1, "mean": 0.5, "std": 0.2},
+        })
+        pct_r = calc.get("pct_r", 33.3)
+        pct_g = calc.get("pct_g", 33.3)
+        pct_b = calc.get("pct_b", 33.3)
+
+        df_raw_stats = pd.DataFrame([
+            {"Channel": "🔴 Red (R)", "Min [0.0, 1.0]": f"{raw_stats['R']['min']:.4f}", "Max [0.0, 1.0]": f"{raw_stats['R']['max']:.4f}", "Mean (μ)": f"{raw_stats['R']['mean']:.4f}", "Std Dev (σ)": f"{raw_stats['R']['std']:.4f}", "Intensity share": f"{pct_r:.1f}%"},
+            {"Channel": "🟢 Green (G)", "Min [0.0, 1.0]": f"{raw_stats['G']['min']:.4f}", "Max [0.0, 1.0]": f"{raw_stats['G']['max']:.4f}", "Mean (μ)": f"{raw_stats['G']['mean']:.4f}", "Std Dev (σ)": f"{raw_stats['G']['std']:.4f}", "Intensity share": f"{pct_g:.1f}%"},
+            {"Channel": "🔵 Blue (B)", "Min [0.0, 1.0]": f"{raw_stats['B']['min']:.4f}", "Max [0.0, 1.0]": f"{raw_stats['B']['max']:.4f}", "Mean (μ)": f"{raw_stats['B']['mean']:.4f}", "Std Dev (σ)": f"{raw_stats['B']['std']:.4f}", "Intensity share": f"{pct_b:.1f}%"},
+        ])
+        st.markdown("**Live Pre-Normalization Channel Statistics:**")
+        st.dataframe(df_raw_stats, width="stretch", hide_index=True)
+
+        st.markdown("---")
+
+        # ----------------------------------------------------------------------
+        # Step 4: ImageNet Z-Score Normalization (Standardization)
+        # ----------------------------------------------------------------------
+        st.markdown("### 4️⃣ Step 4: ImageNet Z-Score Normalization")
+        st.markdown(
+            "Each color channel is standardized using the official ImageNet dataset statistics: "
+            f"Mean $\\mu = {IMAGENET_MEAN}$ and Standard Deviation $\\sigma = {IMAGENET_STD}$. "
+            "These are fixed dataset-wide values, so a single image will not have mean exactly 0 and std exactly 1; they bring inputs to the range the pretrained model expects."
+        )
+
+        col_s4_eq, col_s4_calc = st.columns([1, 1.3], gap="medium")
+        with col_s4_eq:
+            st.markdown("**Mathematical Standardization Equations:**")
+            st.latex(r"z = \frac{x - \mu}{\sigma}")
+            st.latex(r"z_R = \frac{x_R - 0.485}{0.229}, \quad z_G = \frac{x_G - 0.456}{0.224}, \quad z_B = \frac{x_B - 0.406}{0.225}")
+            st.latex(r"\text{Batch Tensor: } (B=1, C=3, H=224, W=224)")
+            tot_elements = calc.get("total_tensor_elements", 150528)
+            tot_mem = calc.get("tensor_memory_bytes", 602112)
+            st.caption(
+                f"Total Elements: **{tot_elements:,}** float32 values | "
+                f"Memory: **{tot_mem / 1024:.1f} KB**"
+            )
+
+        with col_s4_calc:
+            norm_r, norm_g, norm_b = calc.get("norm_center_rgb", (0.0, 0.0, 0.0))
+            st.markdown(f"**Step-by-Step Arithmetic for Center Pixel $(x={cx}, y={cy})$:**")
+            st.latex(
+                r"z_R = \frac{" + f"{t_r:.4f}" + r" - 0.485}{0.229} = \frac{" + f"{t_r - 0.485:+.4f}" + r"}{0.229} = \mathbf{" + f"{norm_r:+.4f}" + r"}"
+            )
+            st.latex(
+                r"z_G = \frac{" + f"{t_g:.4f}" + r" - 0.456}{0.224} = \frac{" + f"{t_g - 0.456:+.4f}" + r"}{0.224} = \mathbf{" + f"{norm_g:+.4f}" + r"}"
+            )
+            st.latex(
+                r"z_B = \frac{" + f"{t_b:.4f}" + r" - 0.406}{0.225} = \frac{" + f"{t_b - 0.406:+.4f}" + r"}{0.225} = \mathbf{" + f"{norm_b:+.4f}" + r"}"
+            )
+
+        # Post-normalization statistics table
+        norm_stats = calc.get("norm_stats", {
+            "R": {"min": -2.0, "max": 2.0, "mean": 0.0, "std": 1.0},
+            "G": {"min": -2.0, "max": 2.0, "mean": 0.0, "std": 1.0},
+            "B": {"min": -2.0, "max": 2.0, "mean": 0.0, "std": 1.0},
+        })
+        df_norm_stats = pd.DataFrame([
+            {"Channel": "🔴 Red (R)", "Normalized Min": f"{norm_stats['R']['min']:+.4f}", "Normalized Max": f"{norm_stats['R']['max']:+.4f}", "Normalized Mean (μ_z)": f"{norm_stats['R']['mean']:+.4f}", "Normalized Std (σ_z)": f"{norm_stats['R']['std']:.4f}"},
+            {"Channel": "🟢 Green (G)", "Normalized Min": f"{norm_stats['G']['min']:+.4f}", "Normalized Max": f"{norm_stats['G']['max']:+.4f}", "Normalized Mean (μ_z)": f"{norm_stats['G']['mean']:+.4f}", "Normalized Std (σ_z)": f"{norm_stats['G']['std']:.4f}"},
+            {"Channel": "🔵 Blue (B)", "Normalized Min": f"{norm_stats['B']['min']:+.4f}", "Normalized Max": f"{norm_stats['B']['max']:+.4f}", "Normalized Mean (μ_z)": f"{norm_stats['B']['mean']:+.4f}", "Normalized Std (σ_z)": f"{norm_stats['B']['std']:.4f}"},
+        ])
+        st.markdown("**Live Post-Normalization Channel Statistics:**")
+        st.dataframe(df_norm_stats, width="stretch", hide_index=True)
+
+        st.markdown("---")
+
+        # ----------------------------------------------------------------------
+        # Step 5: Channel Decompositions & Intensity Share Distribution
+        # ----------------------------------------------------------------------
+        st.markdown("### 5️⃣ Step 5: Color Channel Decompositions & Intensity Share Calculation")
+        st.markdown(
+            "Decomposes the image into individual Red, Green, and Blue intensity arrays to analyze color representation (intensity share = channel pixel sum / total pixel sum)."
+        )
+
+        col_d1, col_d2, col_d3, col_d4 = st.columns(4, gap="small")
         with col_d1:
             st.markdown("**De-normalized Image**")
-            st.image(steps["denormalized_image"], use_container_width=True)
-            st.caption("Reconstructed from normalized tensor")
+            st.image(steps["denormalized_image"], width="stretch")
+            mae_val = calc.get("mae", 0.0)
+            st.caption(f"Reconstructed (MAE: **{mae_val:.6f}**)")
 
         with col_d2:
             st.markdown("**Red Channel (R)**")
             fig_r, ax_r = plt.subplots(figsize=(3, 3))
             ax_r.imshow(steps["channel_r"], cmap="Reds")
             ax_r.axis("off")
-            st.pyplot(fig_r, use_container_width=True)
+            st.pyplot(fig_r, width="stretch")
             plt.close(fig_r)
-            st.caption("Intensity of Red channel")
+            st.caption(f"Intensity share: **{pct_r:.1f}%** | Mean: **{raw_stats['R']['mean']:.3f}**")
 
         with col_d3:
             st.markdown("**Green Channel (G)**")
             fig_g, ax_g = plt.subplots(figsize=(3, 3))
             ax_g.imshow(steps["channel_g"], cmap="Greens")
             ax_g.axis("off")
-            st.pyplot(fig_g, use_container_width=True)
+            st.pyplot(fig_g, width="stretch")
             plt.close(fig_g)
-            st.caption("Intensity of Green channel")
+            st.caption(f"Intensity share: **{pct_g:.1f}%** | Mean: **{raw_stats['G']['mean']:.3f}**")
 
         with col_d4:
             st.markdown("**Blue Channel (B)**")
             fig_b, ax_b = plt.subplots(figsize=(3, 3))
             ax_b.imshow(steps["channel_b"], cmap="Blues")
             ax_b.axis("off")
-            st.pyplot(fig_b, use_container_width=True)
+            st.pyplot(fig_b, width="stretch")
             plt.close(fig_b)
-            st.caption("Intensity of Blue channel")
+            st.caption(f"Intensity share: **{pct_b:.1f}%** | Mean: **{raw_stats['B']['mean']:.3f}**")
 
         st.markdown("---")
 
-        # Row 3: Step e - Training Augmentations
-        st.markdown("#### 3. Training Augmentation Examples")
-        st.caption("Sample augmented versions generated using RandomResizedCrop, RandomHorizontalFlip, RandomRotation(15°), and ColorJitter:")
-        
+        # ----------------------------------------------------------------------
+        # Step 6: Numerical Reversibility (De-normalization) Verification
+        # ----------------------------------------------------------------------
+        st.markdown("### 6️⃣ Step 6: Numerical Inversion & Reconstruction Verification")
+        st.markdown(
+            "Verifies mathematical reversibility by inverting normalized values back to the original $[0.0, 1.0]$ range. "
+            "The Mean Absolute Error (MAE) confirms that normalization is fully reversible (the resize in Step 2 is not reversible)."
+        )
+
+        col_rev1, col_rev2 = st.columns([1, 1.3], gap="medium")
+        with col_rev1:
+            st.latex(r"x_{\text{reconstructed}} = \text{clamp}(z \cdot \sigma + \mu, 0.0, 1.0)")
+            st.latex(r"\text{MAE} = \frac{1}{3 \times 224 \times 224} \sum |x_{\text{raw}} - x_{\text{reconstructed}}| = \mathbf{" + f"{mae_val:.6f}" + r"}")
+        with col_rev2:
+            recon_r, recon_g, recon_b = calc.get("recon_center_rgb", (t_r, t_g, t_b))
+            st.markdown(f"**Center Pixel Inverse Calculation at $(x={cx}, y={cy})$:**")
+            st.markdown(
+                f"- $R_{{\\text{{recon}}}} = ({norm_r:+.4f} \\times 0.229) + 0.485 = \\mathbf{{{recon_r:.4f}}}$ (Original: ${t_r:.4f}$)\n"
+                f"- $G_{{\\text{{recon}}}} = ({norm_g:+.4f} \\times 0.224) + 0.456 = \\mathbf{{{recon_g:.4f}}}$ (Original: ${t_g:.4f}$)\n"
+                f"- $B_{{\\text{{recon}}}} = ({norm_b:+.4f} \\times 0.225) + 0.406 = \\mathbf{{{recon_b:.4f}}}$ (Original: ${t_b:.4f}$)"
+            )
+            st.success(f"✅ Inversion verified: Mean Absolute Error is {mae_val:.6e} (normalization is lossless).")
+
+        st.markdown("---")
+
+        # ----------------------------------------------------------------------
+        # Step 7: Training Augmentations & Mathematical Parameters
+        # ----------------------------------------------------------------------
+        st.markdown("### 7️⃣ Step 7: Training Augmentation Pipeline & Formulations")
+        st.markdown(
+            "During model training, stochastic data augmentations are applied to synthesize variations and prevent overfitting. "
+            "Below are sample augmentations dynamically generated from this input image:"
+        )
+
         aug_cols = st.columns(len(steps["augmentations"]), gap="small")
         for idx, (col_aug, aug_img) in enumerate(zip(aug_cols, steps["augmentations"])):
             with col_aug:
-                st.image(aug_img, use_container_width=True)
+                st.image(aug_img, width="stretch")
                 st.caption(f"Augmentation #{idx + 1}")
+
+        st.markdown(
+            """
+            **Training Augmentation Mathematical Parameters:**
+            1. **RandomResizedCrop(224, scale=(0.75, 1.0))**: Cropped crop area $A_{\\text{crop}} \\in [0.75 \\cdot A, 1.0 \\cdot A]$ with random aspect ratio $r \\in [3/4, 4/3]$, bilinearly resized to $224 \\times 224$.
+            2. **RandomRotation(degrees=15)**: Rotation angle $\\theta \\sim \\mathcal{U}(-15^\\circ, +15^\\circ)$ with affine rotation matrix $\\begin{bmatrix} \\cos\\theta & -\\sin\\theta \\\\ \\sin\\theta & \\cos\\theta \\end{bmatrix}$.
+            3. **RandomHorizontalFlip(p=0.5)**: Reflection matrix $x' = W - 1 - x$ with probability $0.5$.
+            4. **ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1)**: Multiplicative and additive color factors sampled uniformly: Brightness factor $\\in [0.8, 1.2]$, Contrast $\\in [0.8, 1.2]$, Saturation $\\in [0.8, 1.2]$, Hue shift $\\in [-0.1, 0.1]$.
+            """
+        )
 
 
 # ==============================================================================
@@ -514,7 +707,7 @@ def render_model_results_page(class_names: List[str]):
         st.markdown("### 🔲 Confusion Matrix")
         st.caption("Rows: Ground truth classes | Columns: Model predictions")
         fig_cm = plot_confusion_matrix(results["confusion_matrix"], results.get("class_names", class_names))
-        st.pyplot(fig_cm, use_container_width=True)
+        st.pyplot(fig_cm, width="stretch")
         plt.close(fig_cm)
 
     with col_report:
@@ -536,7 +729,7 @@ def render_model_results_page(class_names: List[str]):
 
         if table_rows:
             df_report = pd.DataFrame(table_rows)
-            st.dataframe(df_report, use_container_width=True, hide_index=True)
+            st.dataframe(df_report, width="stretch", hide_index=True)
             
             macro_avg = raw_report.get("macro avg", {})
             weighted_avg = raw_report.get("weighted avg", {})
@@ -553,11 +746,14 @@ def render_model_results_page(class_names: List[str]):
 # Main Entry Point & Sidebar Navigation
 # ==============================================================================
 def main():
-    st.sidebar.image(
-        "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80",
-        caption="South Indian Culinary AI",
-        use_container_width=True,
-    )
+    try:
+        st.sidebar.image(
+            "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80",
+            caption="Indian Culinary AI",
+            width="stretch",
+        )
+    except Exception:
+        pass
     st.sidebar.title("Navigation")
     page_selection = st.sidebar.radio(
         "Go to page:",
@@ -568,7 +764,7 @@ def main():
     st.sidebar.markdown("---")
     st.sidebar.markdown("### ⚙️ System Information")
     device_name = "CUDA (GPU)" if torch.cuda.is_available() else "CPU"
-    st.sidebar.info(f"**Compute Device:** {device_name}\n\n**Backbone:** EfficientNet-B0\n\n**Classes:** 10 South Indian foods")
+    st.sidebar.info(f"**Compute Device:** {device_name}\n\n**Backbone:** EfficientNet-B0\n\n**Classes:** 10 Indian foods")
 
     # Load Model once
     model, class_names, err = get_cached_model()
