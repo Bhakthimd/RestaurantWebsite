@@ -28,7 +28,7 @@ def main():
         if is_match:
             correct += 1
         print(f"True: {cls:<15} | Pred: {pred_cls:<15} | Conf: {conf:>5.1f}% | Match: {is_match}")
-    print(f"Sample Accuracy: {correct}/{len(classes)} ({correct*10}%)\n")
+    print(f"Sample Accuracy: {correct}/{len(classes)} ({correct/len(classes)*100:.1f}%)\n")
 
     # 2. Test EXIF orientation and large image thumbnailing
     print("--- Testing EXIF transpose and large image scaling ---")
