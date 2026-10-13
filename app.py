@@ -86,6 +86,13 @@ st.markdown(
         color: #64748B;
         margin-top: 0.25rem;
     }
+    div[data-testid="stMetricValue"] {
+        font-size: 1.25rem !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -427,19 +434,22 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
             orig_ar = calc.get("orig_aspect_ratio", orig_w / orig_h if orig_h > 0 else 1.0)
             orig_pix = calc.get("orig_pixels", orig_w * orig_h)
             orig_mem = calc.get("orig_memory_bytes", orig_pix * 3)
+            ar_type = "Landscape" if orig_ar > 1.05 else ("Portrait" if orig_ar < 0.95 else "Square")
 
             st.markdown("**Mathematical Calculations:**")
-            st.latex(r"\text{Aspect Ratio (AR)} = \frac{W_{\text{orig}}}{H_{\text{orig}}} = \frac{" + f"{orig_w}" + r"}{" + f"{orig_h}" + r"} = " + f"{orig_ar:.3f} : 1")
-            st.latex(r"N_{\text{orig}} = W_{\text{orig}} \times H_{\text{orig}} = " + f"{orig_w} \\times {orig_h} = {orig_pix:,}" + r"\text{ pixels}")
-            st.latex(r"\text{Raw Memory (RGB uint8)} = \frac{N_{\text{orig}} \times 3 \text{ bytes}}{1024^2} = " + f"{orig_mem / (1024 * 1024):.2f}" + r"\text{ MB}")
+            st.latex(r"\text{Aspect Ratio (AR)} = \frac{W_{\text{orig}}}{H_{\text{orig}}} = \frac{" + f"{orig_w}" + r"}{" + f"{orig_h}" + r"} = \mathbf{" + f"{orig_ar:.3f} : 1" + r"} \quad (" + ar_type + r")")
+            st.latex(r"N_{\text{orig}} = W_{\text{orig}} \times H_{\text{orig}} = " + f"{orig_w} \\times {orig_h} = " + r"\mathbf{" + f"{orig_pix:,}" + r"}" + r"\text{ pixels}")
+            st.latex(r"\text{Raw Memory (RGB uint8)} = \frac{N_{\text{orig}} \times 3 \text{ bytes}}{1024^2} = \frac{" + f"{orig_pix:,}" + r" \times 3}{1,048,576} = " + r"\mathbf{" + f"{orig_mem / (1024 * 1024):.2f}" + r"\text{ MB}}")
             
-            m1, m2, m3 = st.columns(3)
+            m1, m2, m3, m4 = st.columns(4)
             with m1:
                 st.metric("Width × Height", f"{orig_w} × {orig_h} px")
             with m2:
                 st.metric("Aspect Ratio", f"{orig_ar:.2f} : 1")
             with m3:
                 st.metric("Total Pixels", f"{orig_pix:,}")
+            with m4:
+                st.metric("Raw Memory", f"{orig_mem / (1024 * 1024):.2f} MB")
 
         st.markdown("---")
 
@@ -458,22 +468,28 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
             st.image(steps["resized_image"], caption="Resized Image (224 × 224 px)", width="stretch")
 
         with col_s2_calc:
+            resized_w = calc.get("resized_w", 224)
+            resized_h = calc.get("resized_h", 224)
+            resized_ar = calc.get("resized_aspect_ratio", resized_w / resized_h if resized_h > 0 else 1.0)
             scale_x = calc.get("scale_x", 224 / orig_w if orig_w > 0 else 1.0)
             scale_y = calc.get("scale_y", 224 / orig_h if orig_h > 0 else 1.0)
+            ar_distortion = calc.get("ar_distortion", resized_ar / orig_ar if orig_ar > 0 else 1.0)
             pix_change = calc.get("pixel_change_pct", ((50176 - orig_pix) / orig_pix) * 100 if orig_pix > 0 else 0.0)
 
             st.markdown("**Mathematical Calculations:**")
-            st.latex(r"S_x = \frac{W_{\text{target}}}{W_{\text{orig}}} = \frac{224}{" + f"{orig_w}" + r"} = " + f"{scale_x:.4f}")
-            st.latex(r"S_y = \frac{H_{\text{target}}}{H_{\text{orig}}} = \frac{224}{" + f"{orig_h}" + r"} = " + f"{scale_y:.4f}")
-            st.latex(r"\Delta \text{ Pixel Count} = \frac{224 \times 224 - N_{\text{orig}}}{N_{\text{orig}}} \times 100\% = " + f"{pix_change:+.1f}\\%")
-            st.latex(r"I_{\text{target}}(x, y) = \sum_{i \in \{0, 1\}} \sum_{j \in \{0, 1\}} w_{i, j} \cdot I_{\text{orig}}(x_i, y_j)")
+            st.latex(r"\text{Aspect Ratio (AR)} = \frac{W_{\text{target}}}{H_{\text{target}}} = \frac{" + f"{resized_w}" + r"}{" + f"{resized_h}" + r"} = \mathbf{" + f"{resized_ar:.3f} : 1" + r"} \quad (1:1 \text{ Square})")
+            st.latex(r"\text{AR Distortion Factor} = \frac{\text{AR}_{\text{target}}}{\text{AR}_{\text{orig}}} = \frac{" + f"{resized_ar:.3f}" + r"}{" + f"{orig_ar:.3f}" + r"} = \mathbf{" + f"{ar_distortion:.3f}" + r"}")
+            st.latex(r"S_x = \frac{W_{\text{target}}}{W_{\text{orig}}} = \frac{224}{" + f"{orig_w}" + r"} = \mathbf{" + f"{scale_x:.4f}" + r"}, \quad S_y = \frac{H_{\text{target}}}{H_{\text{orig}}} = \frac{224}{" + f"{orig_h}" + r"} = \mathbf{" + f"{scale_y:.4f}" + r"}")
+            st.latex(r"\Delta \text{ Pixel Count} = \frac{224 \times 224 - N_{\text{orig}}}{N_{\text{orig}}} \times 100\% = \frac{50,176 - " + f"{orig_pix:,}" + r"}{" + f"{orig_pix:,}" + r"} \times 100\% = \mathbf{" + f"{pix_change:+.1f}\\%" + r"}")
 
-            m1, m2, m3 = st.columns(3)
+            m1, m2, m3, m4 = st.columns(4)
             with m1:
-                st.metric("Target Size", "224 × 224 px")
+                st.metric("Target Size", f"{resized_w} × {resized_h} px")
             with m2:
-                st.metric("Resized Pixels", "50,176 px")
+                st.metric("Aspect Ratio", f"{resized_ar:.2f} : 1 (1:1)")
             with m3:
+                st.metric("Resized Pixels", "50,176 px")
+            with m4:
                 st.metric("Pixel Scale Δ", f"{pix_change:+.1f}%")
 
         st.markdown("---")
@@ -492,9 +508,16 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
             st.image(steps["raw_tensor"].permute(1, 2, 0).numpy(), caption="PyTorch Float Tensor (3, 224, 224)", width="stretch")
 
         with col_s3_calc:
-            st.markdown("**Mathematical Formula:**")
+            t_ar = calc.get("tensor_aspect_ratio", 224.0 / 224.0)
+            t_elems = calc.get("total_tensor_elements", 3 * 224 * 224)
+            t_mem = calc.get("tensor_memory_bytes", t_elems * 4)
+
+            st.markdown("**Mathematical Calculations:**")
+            st.latex(r"\text{Spatial Aspect Ratio (AR)} = \frac{W_{\text{tensor}}}{H_{\text{tensor}}} = \frac{224}{224} = \mathbf{" + f"{t_ar:.3f} : 1" + r"} \quad (1:1 \text{ Square})")
             st.latex(r"x_{\text{tensor}}[c, y, x] = \frac{x_{\text{uint8}}[y, x, c]}{255.0} \quad \in [0.0, 1.0]")
             st.latex(r"\text{Dimension Permute: } (H=224, W=224, C=3) \xrightarrow{\text{permute}(2, 0, 1)} (C=3, H=224, W=224)")
+            st.latex(r"\text{Total Elements} = C \times H \times W = 3 \times 224 \times 224 = \mathbf{" + f"{t_elems:,}" + r"\text{ values}}")
+            st.latex(r"\text{Float32 Memory} = \frac{" + f"{t_elems:,}" + r" \times 4 \text{ bytes}}{1024} = \mathbf{" + f"{t_mem / 1024:.1f}" + r"\text{ KB}}")
             
             raw_r, raw_g, raw_b = calc.get("raw_center_rgb", (128, 128, 128))
             t_r, t_g, t_b = calc.get("tensor_center_rgb", (0.5, 0.5, 0.5))
@@ -505,6 +528,16 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
                 f"- **Green:** $G_{{\\text{{raw}}}} = {raw_g} \\implies G_{{\\text{{tensor}}}} = \\frac{{{raw_g}}}{{255.0}} = \\mathbf{{{t_g:.4f}}}$\n"
                 f"- **Blue:** $B_{{\\text{{raw}}}} = {raw_b} \\implies B_{{\\text{{tensor}}}} = \\frac{{{raw_b}}}{{255.0}} = \\mathbf{{{t_b:.4f}}}$"
             )
+
+            m1, m2, m3, m4 = st.columns(4)
+            with m1:
+                st.metric("Tensor Shape", "(3, 224, 224)")
+            with m2:
+                st.metric("Spatial Aspect Ratio", f"{t_ar:.2f} : 1")
+            with m3:
+                st.metric("Total Elements", f"{t_elems:,}")
+            with m4:
+                st.metric("Tensor Memory", f"{t_mem / 1024:.1f} KB")
 
         # Pre-normalization statistics table
         raw_stats = calc.get("raw_stats", {
@@ -538,16 +571,25 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
 
         col_s4_eq, col_s4_calc = st.columns([1, 1.3], gap="medium")
         with col_s4_eq:
-            st.markdown("**Mathematical Standardization Equations:**")
-            st.latex(r"z = \frac{x - \mu}{\sigma}")
-            st.latex(r"z_R = \frac{x_R - 0.485}{0.229}, \quad z_G = \frac{x_G - 0.456}{0.224}, \quad z_B = \frac{x_B - 0.406}{0.225}")
-            st.latex(r"\text{Batch Tensor: } (B=1, C=3, H=224, W=224)")
+            norm_ar = calc.get("norm_aspect_ratio", 224.0 / 224.0)
             tot_elements = calc.get("total_tensor_elements", 150528)
             tot_mem = calc.get("tensor_memory_bytes", 602112)
-            st.caption(
-                f"Total Elements: **{tot_elements:,}** float32 values | "
-                f"Memory: **{tot_mem / 1024:.1f} KB**"
-            )
+
+            st.markdown("**Mathematical Standardization Equations:**")
+            st.latex(r"\text{Spatial Aspect Ratio (AR)} = \frac{W_{\text{norm}}}{H_{\text{norm}}} = \frac{224}{224} = \mathbf{" + f"{norm_ar:.3f} : 1" + r"} \quad (1:1 \text{ Square})")
+            st.latex(r"z = \frac{x - \mu}{\sigma} \implies z_c[y, x] = \frac{x_c[y, x] - \mu_c}{\sigma_c}")
+            st.latex(r"z_R = \frac{x_R - 0.485}{0.229}, \quad z_G = \frac{x_G - 0.456}{0.224}, \quad z_B = \frac{x_B - 0.406}{0.225}")
+            st.latex(r"\text{Batch Tensor Shape: } (B=1, C=3, H=224, W=224)")
+            
+            m1, m2, m3, m4 = st.columns(4)
+            with m1:
+                st.metric("Batch Tensor Shape", "(1, 3, 224, 224)")
+            with m2:
+                st.metric("Spatial Aspect Ratio", f"{norm_ar:.2f} : 1")
+            with m3:
+                st.metric("Total Elements", f"{tot_elements:,}")
+            with m4:
+                st.metric("Tensor Memory", f"{tot_mem / 1024:.1f} KB")
 
         with col_s4_calc:
             norm_r, norm_g, norm_b = calc.get("norm_center_rgb", (0.0, 0.0, 0.0))
@@ -591,7 +633,7 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
             st.markdown("**De-normalized Image**")
             st.image(steps["denormalized_image"], width="stretch")
             mae_val = calc.get("mae", 0.0)
-            st.caption(f"Reconstructed (MAE: **{mae_val:.6f}**)")
+            st.caption(f"Reconstructed (224×224 px, AR 1:1, MAE: **{mae_val:.6f}**)")
 
         with col_d2:
             st.markdown("**Red Channel (R)**")
@@ -600,7 +642,7 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
             ax_r.axis("off")
             st.pyplot(fig_r, width="stretch")
             plt.close(fig_r)
-            st.caption(f"Intensity share: **{pct_r:.1f}%** | Mean: **{raw_stats['R']['mean']:.3f}**")
+            st.caption(f"224×224 px, AR 1:1 | Share: **{pct_r:.1f}%** | Mean: **{raw_stats['R']['mean']:.3f}**")
 
         with col_d3:
             st.markdown("**Green Channel (G)**")
@@ -609,7 +651,7 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
             ax_g.axis("off")
             st.pyplot(fig_g, width="stretch")
             plt.close(fig_g)
-            st.caption(f"Intensity share: **{pct_g:.1f}%** | Mean: **{raw_stats['G']['mean']:.3f}**")
+            st.caption(f"224×224 px, AR 1:1 | Share: **{pct_g:.1f}%** | Mean: **{raw_stats['G']['mean']:.3f}**")
 
         with col_d4:
             st.markdown("**Blue Channel (B)**")
@@ -618,7 +660,36 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
             ax_b.axis("off")
             st.pyplot(fig_b, width="stretch")
             plt.close(fig_b)
-            st.caption(f"Intensity share: **{pct_b:.1f}%** | Mean: **{raw_stats['B']['mean']:.3f}**")
+            st.caption(f"224×224 px, AR 1:1 | Share: **{pct_b:.1f}%** | Mean: **{raw_stats['B']['mean']:.3f}**")
+
+        ch_ar = calc.get("channel_aspect_ratio", 224.0 / 224.0)
+        energy_r = calc.get("energy_r", 0.0)
+        energy_g = calc.get("energy_g", 0.0)
+        energy_b = calc.get("energy_b", 0.0)
+        tot_energy = calc.get("total_energy", energy_r + energy_g + energy_b)
+
+        col_s5_eq1, col_s5_eq2 = st.columns([1, 1.3], gap="medium")
+        with col_s5_eq1:
+            st.markdown("**Channel Plane Aspect Ratio & Energy:**")
+            st.latex(r"\text{Channel Aspect Ratio (AR)} = \frac{W_{\text{channel}}}{H_{\text{channel}}} = \frac{224}{224} = \mathbf{" + f"{ch_ar:.3f} : 1" + r"} \quad (1:1 \text{ Square})")
+            st.latex(r"E_{\text{total}} = \sum R + \sum G + \sum B = " + f"{energy_r:,.1f} + {energy_g:,.1f} + {energy_b:,.1f} = " + r"\mathbf{" + f"{tot_energy:,.1f}" + r"}")
+
+        with col_s5_eq2:
+            st.markdown("**Intensity Share Calculations:**")
+            st.latex(r"\text{Share}_R = \frac{E_R}{E_{\text{total}}} \times 100\% = \frac{" + f"{energy_r:,.1f}" + r"}{" + f"{tot_energy:,.1f}" + r"} \times 100\% = \mathbf{" + f"{pct_r:.2f}\\%" + r"}")
+            st.latex(r"\text{Share}_G = \frac{E_G}{E_{\text{total}}} \times 100\% = \frac{" + f"{energy_g:,.1f}" + r"}{" + f"{tot_energy:,.1f}" + r"} \times 100\% = \mathbf{" + f"{pct_g:.2f}\\%" + r"}")
+            st.latex(r"\text{Share}_B = \frac{E_B}{E_{\text{total}}} \times 100\% = \frac{" + f"{energy_b:,.1f}" + r"}{" + f"{tot_energy:,.1f}" + r"} \times 100\% = \mathbf{" + f"{pct_b:.2f}\\%" + r"}")
+
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.metric("Channel Dimensions", "224 × 224 px")
+        with m2:
+            st.metric("Channel Aspect Ratio", f"{ch_ar:.2f} : 1 (1:1)")
+        with m3:
+            st.metric("Total Energy", f"{tot_energy:,.0f}")
+        with m4:
+            dom_channel = "Red (R)" if pct_r >= max(pct_g, pct_b) else ("Green (G)" if pct_g >= pct_b else "Blue (B)")
+            st.metric("Dominant Channel", dom_channel)
 
         st.markdown("---")
 
@@ -631,8 +702,11 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
             "The Mean Absolute Error (MAE) confirms that normalization is fully reversible (the resize in Step 2 is not reversible)."
         )
 
+        recon_ar = calc.get("recon_aspect_ratio", 224.0 / 224.0)
         col_rev1, col_rev2 = st.columns([1, 1.3], gap="medium")
         with col_rev1:
+            st.markdown("**Reconstruction Calculations:**")
+            st.latex(r"\text{Aspect Ratio (AR)} = \frac{W_{\text{recon}}}{H_{\text{recon}}} = \frac{224}{224} = \mathbf{" + f"{recon_ar:.3f} : 1" + r"} \quad (1:1 \text{ Square})")
             st.latex(r"x_{\text{reconstructed}} = \text{clamp}(z \cdot \sigma + \mu, 0.0, 1.0)")
             st.latex(r"\text{MAE} = \frac{1}{3 \times 224 \times 224} \sum |x_{\text{raw}} - x_{\text{reconstructed}}| = \mathbf{" + f"{mae_val:.6f}" + r"}")
         with col_rev2:
@@ -645,6 +719,16 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
             )
             st.success(f"✅ Inversion verified: Mean Absolute Error is {mae_val:.6e} (normalization is lossless).")
 
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.metric("Reconstructed Size", "224 × 224 × 3 px")
+        with m2:
+            st.metric("Aspect Ratio", f"{recon_ar:.2f} : 1 (1:1)")
+        with m3:
+            st.metric("Reconstruction MAE", f"{mae_val:.2e}")
+        with m4:
+            st.metric("Invertibility", "100% Lossless")
+
         st.markdown("---")
 
         # ----------------------------------------------------------------------
@@ -656,21 +740,42 @@ def render_food_classifier_page(model: torch.nn.Module, class_names: List[str]):
             "Below are sample augmentations dynamically generated from this input image:"
         )
 
+        aug_ar = calc.get("aug_aspect_ratio", 224.0 / 224.0)
         aug_cols = st.columns(len(steps["augmentations"]), gap="small")
         for idx, (col_aug, aug_img) in enumerate(zip(aug_cols, steps["augmentations"])):
             with col_aug:
                 st.image(aug_img, width="stretch")
-                st.caption(f"Augmentation #{idx + 1}")
+                st.caption(f"Aug #{idx + 1} (224×224 px, AR {aug_ar:.2f}:1)")
 
-        st.markdown(
-            """
-            **Training Augmentation Mathematical Parameters:**
-            1. **RandomResizedCrop(224, scale=(0.75, 1.0))**: Cropped crop area $A_{\\text{crop}} \\in [0.75 \\cdot A, 1.0 \\cdot A]$ with random aspect ratio $r \\in [3/4, 4/3]$, bilinearly resized to $224 \\times 224$.
-            2. **RandomRotation(degrees=15)**: Rotation angle $\\theta \\sim \\mathcal{U}(-15^\\circ, +15^\\circ)$ with affine rotation matrix $\\begin{bmatrix} \\cos\\theta & -\\sin\\theta \\\\ \\sin\\theta & \\cos\\theta \\end{bmatrix}$.
-            3. **RandomHorizontalFlip(p=0.5)**: Reflection matrix $x' = W - 1 - x$ with probability $0.5$.
-            4. **ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1)**: Multiplicative and additive color factors sampled uniformly: Brightness factor $\\in [0.8, 1.2]$, Contrast $\\in [0.8, 1.2]$, Saturation $\\in [0.8, 1.2]$, Hue shift $\\in [-0.1, 0.1]$.
-            """
-        )
+        col_aug_calc1, col_aug_calc2 = st.columns([1, 1.3], gap="medium")
+        with col_aug_calc1:
+            st.markdown("**Augmented Output Geometry:**")
+            st.latex(r"\text{Output Aspect Ratio (AR)} = \frac{W_{\text{aug}}}{H_{\text{aug}}} = \frac{224}{224} = \mathbf{" + f"{aug_ar:.3f} : 1" + r"} \quad (1:1 \text{ Square})")
+            st.latex(r"\text{Random Crop AR Range: } r_{\text{crop}} \in \left[\frac{3}{4}, \frac{4}{3}\right] = \mathbf{[0.750 : 1, \ 1.333 : 1]}")
+            st.latex(r"A_{\text{crop}} \in [0.75 \times 50,176, \ 1.0 \times 50,176] = \mathbf{[37,632, \ 50,176] \text{ pixels}}")
+
+        with col_aug_calc2:
+            st.markdown("**Stochastic Parameter Intervals:**")
+            st.markdown(
+                """
+                1. **RandomResizedCrop(224, scale=(0.75, 1.0))**:
+                   - Crop area $A_{\\text{crop}} \\in [0.75 \\cdot A, 1.0 \\cdot A]$
+                   - Crop aspect ratio $r \\in [3/4, 4/3]$, bilinearly resized to $224 \\times 224$ (AR 1:1).
+                2. **RandomRotation(degrees=15)**: Rotation angle $\\theta \\sim \\mathcal{U}(-15^\\circ, +15^\\circ)$ with matrix $\\begin{bmatrix} \\cos\\theta & -\\sin\\theta \\\\ \\sin\\theta & \\cos\\theta \\end{bmatrix}$.
+                3. **RandomHorizontalFlip(p=0.5)**: Reflection matrix $x' = W - 1 - x$ with probability $0.5$.
+                4. **ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1)**: Brightness $\\in [0.8, 1.2]$, Contrast $\\in [0.8, 1.2]$, Saturation $\\in [0.8, 1.2]$, Hue shift $\\in [-0.1, 0.1]$.
+                """
+            )
+
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.metric("Augmented Output Size", "224 × 224 px")
+        with m2:
+            st.metric("Output Aspect Ratio", f"{aug_ar:.2f} : 1 (1:1)")
+        with m3:
+            st.metric("Crop AR Range", "0.75:1 to 1.33:1")
+        with m4:
+            st.metric("Crop Area Range", "37,632 - 50,176 px")
 
 
 # ==============================================================================

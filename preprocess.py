@@ -137,8 +137,10 @@ def extract_preprocessing_steps(image: Image.Image, num_aug_samples: int = 5) ->
     resized_224 = transforms.Resize((224, 224))(prepared_img)
     resized_w, resized_h = resized_224.size
     resized_pixels = resized_w * resized_h  # 50,176 pixels
+    resized_aspect_ratio = resized_w / resized_h if resized_h > 0 else 1.0
     scale_x = resized_w / orig_w if orig_w > 0 else 1.0
     scale_y = resized_h / orig_h if orig_h > 0 else 1.0
+    ar_distortion = (resized_aspect_ratio / orig_aspect_ratio) if orig_aspect_ratio > 0 else 1.0
     pixel_change_pct = ((resized_pixels - orig_pixels) / orig_pixels) * 100.0 if orig_pixels > 0 else 0.0
     
     # Step c: Converted to tensor (values in [0, 1])
@@ -257,7 +259,15 @@ def extract_preprocessing_steps(image: Image.Image, num_aug_samples: int = 5) ->
         "pct_r": pct_r,
         "pct_g": pct_g,
         "pct_b": pct_b,
+        "total_energy": total_energy,
         "mae": mae,
+        "resized_aspect_ratio": resized_aspect_ratio,
+        "ar_distortion": ar_distortion,
+        "tensor_aspect_ratio": 224.0 / 224.0,
+        "norm_aspect_ratio": 224.0 / 224.0,
+        "channel_aspect_ratio": 224.0 / 224.0,
+        "recon_aspect_ratio": 224.0 / 224.0,
+        "aug_aspect_ratio": 224.0 / 224.0,
         "total_tensor_elements": 1 * 3 * 224 * 224,
         "tensor_memory_bytes": 1 * 3 * 224 * 224 * 4,  # float32 = 4 bytes
     }
